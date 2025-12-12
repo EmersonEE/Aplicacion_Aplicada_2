@@ -4,7 +4,7 @@ import '../models/alarm.dart';
 import '../services/notification_service.dart';
 import '../services/alarm_storage.dart';
 import 'alarm_edit_screen.dart';
-
+import '../services/firebase_service.dart';
 class AlarmScreen extends StatefulWidget {
   @override
   _AlarmScreenState createState() => _AlarmScreenState();
@@ -22,70 +22,79 @@ class _AlarmScreenState extends State<AlarmScreen> {
       _loadAlarms();
     });
   }
-
   Future<void> _loadAlarms() async {
     if (!mounted) return;
-
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      final loadedAlarms = await AlarmStorage.loadAlarms();
+      // 1. Primero intenta cargar desde Firebase
+      //    Firebase (esto será casi instantáneo si hay internet)
+      final snapshot = await FirebaseAlarmService.db.get();
+      if (snapshot.exists && snapshot.value != null) {
+        final Map<dynamic, dynamic> data = snapshot.value as Map<dynamic, dynamic>;
+        final List<Alarm> firebaseAlarms = data.entries.map((e) {
+          final json = Map<String, dynamic>.from(e.value);
+          return Alarm.fromJson(json);
+        }).toList();
 
-      if (!mounted) return;
+        setState(() {
+          alarms = firebaseAlarms;
+          if (alarms.isNotEmpty) {
+            nextId = alarms.map((a) => a.id).reduce((a, b) => a > b ? a : b) + 1;
+          }
+        });
+      } else {
+        // 2. Si Firebase está vacío → carga desde SharedPreferences (respaldo)
+        final local = await AlarmStorage.loadAlarms();
+        setState(() {
+          alarms = local;
+          if (alarms.isNotEmpty) {
+            nextId = alarms.map((a) => a.id).reduce((a, b) => a > b ? a : b) + 1;
+          }
+        });
+        // y sube lo local a Firebase por primera vez
+        await FirebaseAlarmService.uploadAlarms(alarms);
+      }
 
-      setState(() {
-        alarms = loadedAlarms;
-        if (alarms.isNotEmpty) {
-          nextId = alarms.map((a) => a.id).reduce((a, b) => a > b ? a : b) + 1;
-        }
-        _isLoading = false;
-      });
-
-      // Reprogramar alarmas habilitadas al abrir la app
+      // Reprogramar todas las alarmas habilitadas
       for (final alarm in alarms) {
         if (alarm.isEnabled) {
-          DateTime scheduledDate = alarm.time;
-
-          if (scheduledDate.isBefore(DateTime.now())) {
-            scheduledDate = DateTime(
-              scheduledDate.year,
-              scheduledDate.month,
-              scheduledDate.day + 1,
-              scheduledDate.hour,
-              scheduledDate.minute,
-            );
-            alarm.time = scheduledDate; // Actualiza la hora mostrada
-          }
-
-          try {
-            await NotificationService.scheduleAlarm(
-              id: alarm.id,
-              title: alarm.title,
-              body: '¡Hora de despertar!',
-              scheduledDate: scheduledDate,
-            );
-          } catch (e) {
-            print('Error reprogramando alarma ${alarm.id}: $e');
-          }
+          await NotificationService.scheduleAlarm(
+            id: alarm.id,
+            title: alarm.title,
+            body: '¡Hora de alimentar!',
+            scheduledDate: alarm.time,
+          );
         }
       }
-      await _saveAlarms(); // Guarda las horas actualizadas
+
+      // 3. Escuchar cambios en tiempo real (para futuras sincronizaciones)
+      FirebaseAlarmService.alarmsStream.listen((updatedAlarms) {
+        if (mounted) {
+          setState(() {
+            alarms = updatedAlarms;
+          });
+        }
+      });
+
     } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error cargando alarmas: $e')));
-      }
+      // Si falla internet, carga desde local
+      final local = await AlarmStorage.loadAlarms();
+      setState(() {
+        alarms = local;
+        _isLoading = false;
+      });
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _saveAlarms() async {
+    // Guardar localmente (por si no hay internet)
     await AlarmStorage.saveAlarms(alarms);
+    // Subir a Firebase (si hay internet, si no hay internet simplemente no hace nada)
+    await FirebaseAlarmService.uploadAlarms(alarms);
   }
-
   void _addAlarm() async {
     final newId = nextId++;
     final result = await Navigator.push<Alarm>(

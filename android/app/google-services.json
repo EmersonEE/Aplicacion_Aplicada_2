@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "419221089542",
+    "project_id": "petremind-b2b41",
+    "storage_bucket": "petremind-b2b41.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:419221089542:android:f6c4f8229e5c581bd10287",
+        "android_client_info": {
+          "package_name": "com.example.alarmapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBWoLQs24sRPNNV-uKvsjo2um2IF8EZUZA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/alarm.dart';
-import 'repeat_selection_screen.dart'; // ← Nuevo archivo que creamos antes
 
 class AlarmEditScreen extends StatefulWidget {
   final Alarm? existingAlarm;
@@ -20,30 +19,20 @@ class AlarmEditScreen extends StatefulWidget {
 class _AlarmEditScreenState extends State<AlarmEditScreen> {
   late TextEditingController _titleController;
   late DateTime _selectedTime;
-  late List<int> _repeatDays;
+  late int _portions;
 
   @override
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.existingAlarm?.title ?? 'Alarma');
     _selectedTime = widget.existingAlarm?.time ?? DateTime.now().add(Duration(hours: 1));
-    _repeatDays = widget.existingAlarm?.repeatDays ?? [];
+    _portions = widget.existingAlarm?.portions ?? 1;
   }
 
   @override
   void dispose() {
     _titleController.dispose();
     super.dispose();
-  }
-
-  String _repeatText() {
-    if (_repeatDays.isEmpty) return 'Ninguna';
-    if (_repeatDays.length == 7) return 'Diaria';
-    if (_repeatDays.length == 5 && !_repeatDays.contains(0) && !_repeatDays.contains(6)) return 'Lunes a viernes';
-    if (_repeatDays.length == 2 && _repeatDays.contains(0) && _repeatDays.contains(6)) return 'Fines de semana';
-
-    const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-    return _repeatDays.map((d) => dayNames[d]).join(', ');
   }
 
   void _saveAlarm() {
@@ -55,13 +44,13 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
             title: title,
             time: _selectedTime,
             isEnabled: widget.existingAlarm!.isEnabled,
-            repeatDays: _repeatDays,
+            portions: _portions,  // ← AQUÍ ESTABA EL ERROR: faltaba pasar _portions
           )
         : Alarm(
             id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
             title: title,
             time: _selectedTime,
-            repeatDays: _repeatDays,
+            portions: _portions,  // ← Aquí también
           );
 
     widget.onSave(alarm);
@@ -79,10 +68,7 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
         actions: [
           TextButton(
             onPressed: _saveAlarm,
-            child: Text(
-              'Guardar',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
+            child: Text('Guardar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -133,22 +119,26 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
             SizedBox(height: 16),
             Card(
               child: ListTile(
-                title: Text('Repetir', style: TextStyle(fontSize: 18)),
-                subtitle: Text(_repeatText(), style: TextStyle(fontSize: 18)),
-                trailing: Icon(Icons.arrow_forward_ios),
-                onTap: () async {
-                  final result = await Navigator.push<List<int>>(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => RepeatSelectionScreen(initialDays: _repeatDays),
+                title: Text('Cantidad de alimento', style: TextStyle(fontSize: 18)),
+                subtitle: Text('$_portions porción${_portions == 1 ? '' : 'es'}', style: TextStyle(fontSize: 24)),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.remove_circle_outline),
+                      onPressed: () {
+                        if (_portions > 1) setState(() => _portions--);
+                      },
                     ),
-                  );
-                  if (result != null) {
-                    setState(() {
-                      _repeatDays = result;
-                    });
-                  }
-                },
+                    Text('$_portions', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+                    IconButton(
+                      icon: Icon(Icons.add_circle_outline),
+                      onPressed: () {
+                        if (_portions < 10) setState(() => _portions++);
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
           ],

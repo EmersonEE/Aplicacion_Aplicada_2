@@ -3,22 +3,22 @@ class Alarm {
   String title;
   DateTime time;
   bool isEnabled;
-  List<int> repeatDays; // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado. [] = sin repetición
+  int portions;  // ← Debe estar aquí
 
   Alarm({
     required this.id,
     required this.title,
     required this.time,
     this.isEnabled = true,
-    List<int>? repeatDays,
-  }) : repeatDays = repeatDays ?? [];
+    this.portions = 1,
+  });
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'title': title,
         'time': time.millisecondsSinceEpoch,
         'isEnabled': isEnabled,
-        'repeatDays': repeatDays,
+        'portions': portions,
       };
 
   factory Alarm.fromJson(Map<String, dynamic> json) => Alarm(
@@ -26,6 +26,6 @@ class Alarm {
         title: json['title'] as String,
         time: DateTime.fromMillisecondsSinceEpoch(json['time'] as int),
         isEnabled: json['isEnabled'] as bool? ?? true,
-        repeatDays: (json['repeatDays'] as List<dynamic>?)?.cast<int>() ?? [],
+        portions: json['portions'] as int? ?? 1,
       );
 }

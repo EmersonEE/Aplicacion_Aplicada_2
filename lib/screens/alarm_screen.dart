@@ -5,6 +5,7 @@ import '../services/notification_service.dart';
 import '../services/alarm_storage.dart';
 import 'alarm_edit_screen.dart';
 import '../services/firebase_service.dart';
+
 class AlarmScreen extends StatefulWidget {
   @override
   _AlarmScreenState createState() => _AlarmScreenState();
@@ -22,6 +23,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
       _loadAlarms();
     });
   }
+
   Future<void> _loadAlarms() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
@@ -31,7 +33,8 @@ class _AlarmScreenState extends State<AlarmScreen> {
       //    Firebase (esto será casi instantáneo si hay internet)
       final snapshot = await FirebaseAlarmService.db.get();
       if (snapshot.exists && snapshot.value != null) {
-        final Map<dynamic, dynamic> data = snapshot.value as Map<dynamic, dynamic>;
+        final Map<dynamic, dynamic> data =
+            snapshot.value as Map<dynamic, dynamic>;
         final List<Alarm> firebaseAlarms = data.entries.map((e) {
           final json = Map<String, dynamic>.from(e.value);
           return Alarm.fromJson(json);
@@ -40,7 +43,8 @@ class _AlarmScreenState extends State<AlarmScreen> {
         setState(() {
           alarms = firebaseAlarms;
           if (alarms.isNotEmpty) {
-            nextId = alarms.map((a) => a.id).reduce((a, b) => a > b ? a : b) + 1;
+            nextId =
+                alarms.map((a) => a.id).reduce((a, b) => a > b ? a : b) + 1;
           }
         });
       } else {
@@ -49,7 +53,8 @@ class _AlarmScreenState extends State<AlarmScreen> {
         setState(() {
           alarms = local;
           if (alarms.isNotEmpty) {
-            nextId = alarms.map((a) => a.id).reduce((a, b) => a > b ? a : b) + 1;
+            nextId =
+                alarms.map((a) => a.id).reduce((a, b) => a > b ? a : b) + 1;
           }
         });
         // y sube lo local a Firebase por primera vez
@@ -76,7 +81,6 @@ class _AlarmScreenState extends State<AlarmScreen> {
           });
         }
       });
-
     } catch (e) {
       // Si falla internet, carga desde local
       final local = await AlarmStorage.loadAlarms();
@@ -95,32 +99,37 @@ class _AlarmScreenState extends State<AlarmScreen> {
     // Subir a Firebase (si hay internet, si no hay internet simplemente no hace nada)
     await FirebaseAlarmService.uploadAlarms(alarms);
   }
+
   void _addAlarm() async {
-    final newId = nextId++;
     final result = await Navigator.push<Alarm>(
       context,
       MaterialPageRoute(
         builder: (context) => AlarmEditScreen(
           onSave: (alarm) {
-            Navigator.pop(
-              context,
-              Alarm(id: newId, title: alarm.title, time: alarm.time),
-            );
+            Navigator.pop(context, alarm);
           },
         ),
       ),
     );
 
     if (result != null) {
+      final newAlarm = Alarm(
+        id: nextId++, // Usamos nextId para ID único
+        title: result.title,
+        time: result.time,
+        portions:
+            result.portions, // ← AQUÍ ESTABA EL ERROR: faltaba pasrar portions
+      );
+
       setState(() {
-        alarms.add(result);
+        alarms.add(newAlarm);
       });
       await _saveAlarms();
       await NotificationService.scheduleAlarm(
-        id: result.id,
-        title: result.title,
-        body: '¡Hora de despertar!',
-        scheduledDate: result.time,
+        id: newAlarm.id,
+        title: newAlarm.title,
+        body: '¡Hora de alimentar!',
+        scheduledDate: newAlarm.time,
       );
     }
   }
@@ -231,7 +240,19 @@ class _AlarmScreenState extends State<AlarmScreen> {
                   onDismissed: (direction) => _deleteAlarm(alarm),
                   child: ListTile(
                     title: Text(alarm.title),
-                    subtitle: Text(DateFormat('HH:mm').format(alarm.time)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(DateFormat('HH:mm').format(alarm.time)),
+                        Text(
+                          '${alarm.portions} porción${alarm.portions == 1 ? '' : 'es'} de alimento',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
                     trailing: Switch(
                       value: alarm.isEnabled,
                       onChanged: (_) => _toggleAlarm(alarm),

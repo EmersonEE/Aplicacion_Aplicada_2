@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/alarm.dart';
+import 'repeat_selection_screen.dart';
 
 class AlarmEditScreen extends StatefulWidget {
   final Alarm? existingAlarm;
@@ -19,20 +20,34 @@ class AlarmEditScreen extends StatefulWidget {
 class _AlarmEditScreenState extends State<AlarmEditScreen> {
   late TextEditingController _titleController;
   late DateTime _selectedTime;
-  late int _portions;
+  late int _grams;
+  late List<int> _repeatDays;
+
+  final List<int> gramOptions = [20, 40, 60, 80, 100];
 
   @override
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.existingAlarm?.title ?? 'Alarma');
     _selectedTime = widget.existingAlarm?.time ?? DateTime.now().add(Duration(hours: 1));
-    _portions = widget.existingAlarm?.portions ?? 1;
+    _grams = widget.existingAlarm?.grams ?? 40;
+    _repeatDays = widget.existingAlarm?.repeatDays ?? [];
   }
 
   @override
   void dispose() {
     _titleController.dispose();
     super.dispose();
+  }
+
+  String _repeatText() {
+    if (_repeatDays.isEmpty) return 'Ninguna';
+    if (_repeatDays.length == 7) return 'Diaria';
+    if (_repeatDays.length == 5 && !_repeatDays.contains(0) && !_repeatDays.contains(6)) return 'Lunes a viernes';
+    if (_repeatDays.length == 2 && _repeatDays.contains(0) && _repeatDays.contains(6)) return 'Fines de semana';
+
+    const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    return _repeatDays.map((d) => dayNames[d]).join(', ');
   }
 
   void _saveAlarm() {
@@ -44,13 +59,15 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
             title: title,
             time: _selectedTime,
             isEnabled: widget.existingAlarm!.isEnabled,
-            portions: _portions,  // ← AQUÍ ESTABA EL ERROR: faltaba pasar _portions
+            grams: _grams,
+            repeatDays: _repeatDays,
           )
         : Alarm(
             id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
             title: title,
             time: _selectedTime,
-            portions: _portions,  // ← Aquí también
+            grams: _grams,
+            repeatDays: _repeatDays,
           );
 
     widget.onSave(alarm);
@@ -72,7 +89,8 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
           ),
         ],
       ),
-      body: Padding(
+      body: SingleChildScrollView( 
+        child: Padding(
         padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -119,31 +137,46 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
             SizedBox(height: 16),
             Card(
               child: ListTile(
-                title: Text('Cantidad de alimento', style: TextStyle(fontSize: 18)),
-                subtitle: Text('$_portions porción${_portions == 1 ? '' : 'es'}', style: TextStyle(fontSize: 24)),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.remove_circle_outline),
-                      onPressed: () {
-                        if (_portions > 1) setState(() => _portions--);
-                      },
+                title: Text('Repetir', style: TextStyle(fontSize: 18)),
+                subtitle: Text(_repeatText(), style: TextStyle(fontSize: 18)),
+                trailing: Icon(Icons.arrow_forward_ios),
+                onTap: () async {
+                  final result = await Navigator.push<List<int>>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => RepeatSelectionScreen(initialDays: _repeatDays),
                     ),
-                    Text('$_portions', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
-                    IconButton(
-                      icon: Icon(Icons.add_circle_outline),
-                      onPressed: () {
-                        if (_portions < 10) setState(() => _portions++);
-                      },
-                    ),
-                  ],
-                ),
+                  );
+                  if (result != null) {
+                    setState(() {
+                      _repeatDays = result;
+                    });
+                  }
+                },
               ),
+            ),
+            SizedBox(height: 16),
+            Text('Cantidad de alimento', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            SizedBox(height: 8),
+            Wrap(
+              spacing: 12,
+              children: gramOptions.map((grams) {
+                return ChoiceChip(
+                  label: Text('$grams g'),
+                  selected: _grams == grams,
+                  onSelected: (selected) {
+                    if (selected) {
+                      setState(() {
+                        _grams = grams;
+                      });
+                    }
+                  },
+                );
+              }).toList(),
             ),
           ],
         ),
-      ),
+      ),),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _saveAlarm,
         icon: Icon(Icons.check),

@@ -24,17 +24,25 @@ class _AlarmScreenState extends State<AlarmScreen> {
     });
   }
 
+  // Función auxiliar para mostrar texto de repetición
+  String _repeatText(List<int> days) {
+    if (days.isEmpty) return '';
+    if (days.length == 7) return 'Diaria';
+    if (days.length == 5 && !days.contains(0) && !days.contains(6)) return 'Lunes a viernes';
+    if (days.length == 2 && days.contains(0) && days.contains(6)) return 'Fines de semana';
+
+    const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    return days.map((d) => dayNames[d]).join(', ');
+  }
+
   Future<void> _loadAlarms() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {
-      // 1. Primero intenta cargar desde Firebase
-      //    Firebase (esto será casi instantáneo si hay internet)
       final snapshot = await FirebaseAlarmService.db.get();
       if (snapshot.exists && snapshot.value != null) {
-        final Map<dynamic, dynamic> data =
-            snapshot.value as Map<dynamic, dynamic>;
+        final Map<dynamic, dynamic> data = snapshot.value as Map<dynamic, dynamic>;
         final List<Alarm> firebaseAlarms = data.entries.map((e) {
           final json = Map<String, dynamic>.from(e.value);
           return Alarm.fromJson(json);
@@ -43,25 +51,20 @@ class _AlarmScreenState extends State<AlarmScreen> {
         setState(() {
           alarms = firebaseAlarms;
           if (alarms.isNotEmpty) {
-            nextId =
-                alarms.map((a) => a.id).reduce((a, b) => a > b ? a : b) + 1;
+            nextId = alarms.map((a) => a.id).reduce((a, b) => a > b ? a : b) + 1;
           }
         });
       } else {
-        // 2. Si Firebase está vacío → carga desde SharedPreferences (respaldo)
         final local = await AlarmStorage.loadAlarms();
         setState(() {
           alarms = local;
           if (alarms.isNotEmpty) {
-            nextId =
-                alarms.map((a) => a.id).reduce((a, b) => a > b ? a : b) + 1;
+            nextId = alarms.map((a) => a.id).reduce((a, b) => a > b ? a : b) + 1;
           }
         });
-        // y sube lo local a Firebase por primera vez
         await FirebaseAlarmService.uploadAlarms(alarms);
       }
 
-      // Reprogramar todas las alarmas habilitadas
       for (final alarm in alarms) {
         if (alarm.isEnabled) {
           await NotificationService.scheduleAlarm(
@@ -73,7 +76,6 @@ class _AlarmScreenState extends State<AlarmScreen> {
         }
       }
 
-      // 3. Escuchar cambios en tiempo real (para futuras sincronizaciones)
       FirebaseAlarmService.alarmsStream.listen((updatedAlarms) {
         if (mounted) {
           setState(() {
@@ -82,7 +84,6 @@ class _AlarmScreenState extends State<AlarmScreen> {
         }
       });
     } catch (e) {
-      // Si falla internet, carga desde local
       final local = await AlarmStorage.loadAlarms();
       setState(() {
         alarms = local;
@@ -94,9 +95,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
   }
 
   Future<void> _saveAlarms() async {
-    // Guardar localmente (por si no hay internet)
     await AlarmStorage.saveAlarms(alarms);
-    // Subir a Firebase (si hay internet, si no hay internet simplemente no hace nada)
     await FirebaseAlarmService.uploadAlarms(alarms);
   }
 
@@ -114,11 +113,11 @@ class _AlarmScreenState extends State<AlarmScreen> {
 
     if (result != null) {
       final newAlarm = Alarm(
-        id: nextId++, // Usamos nextId para ID único
+        id: nextId++,
         title: result.title,
         time: result.time,
-        portions:
-            result.portions, // ← AQUÍ ESTABA EL ERROR: faltaba pasrar portions
+        grams: result.grams,
+        repeatDays: result.repeatDays,  // ← Guardamos repetición
       );
 
       setState(() {
@@ -151,6 +150,8 @@ class _AlarmScreenState extends State<AlarmScreen> {
       setState(() {
         existingAlarm.title = result.title;
         existingAlarm.time = result.time;
+        existingAlarm.grams = result.grams;
+        existingAlarm.repeatDays = result.repeatDays;  // ← Actualizamos repetición
       });
       await _saveAlarms();
 
@@ -159,7 +160,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
         await NotificationService.scheduleAlarm(
           id: existingAlarm.id,
           title: existingAlarm.title,
-          body: '¡Hora de despertar!',
+          body: '¡Hora de alimentar!',
           scheduledDate: existingAlarm.time,
         );
       }
@@ -176,7 +177,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
       await NotificationService.scheduleAlarm(
         id: alarm.id,
         title: alarm.title,
-        body: '¡Hora de despertar!',
+        body: '¡Hora de alimentar!',
         scheduledDate: alarm.time,
       );
     } else {
@@ -206,7 +207,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
               await NotificationService.scheduleAlarm(
                 id: alarm.id,
                 title: alarm.title,
-                body: '¡Hora de despertar!',
+                body: '¡Hora de alimentar!',
                 scheduledDate: alarm.time,
               );
             }
@@ -223,45 +224,44 @@ class _AlarmScreenState extends State<AlarmScreen> {
       body: _isLoading
           ? Center(child: CircularProgressIndicator())
           : alarms.isEmpty
-          ? Center(child: Text('No hay alarmas. ¡Agrega una!'))
-          : ListView.builder(
-              itemCount: alarms.length,
-              itemBuilder: (context, index) {
-                final alarm = alarms[index];
-                return Dismissible(
-                  key: Key(alarm.id.toString()),
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    color: Colors.red,
-                    alignment: Alignment.centerRight,
-                    padding: EdgeInsets.symmetric(horizontal: 20),
-                    child: Icon(Icons.delete, color: Colors.white, size: 30),
-                  ),
-                  onDismissed: (direction) => _deleteAlarm(alarm),
-                  child: ListTile(
-                    title: Text(alarm.title),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(DateFormat('HH:mm').format(alarm.time)),
-                        Text(
-                          '${alarm.portions} porción${alarm.portions == 1 ? '' : 'es'} de alimento',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
+              ? Center(child: Text('No hay alarmas. ¡Agrega una!'))
+              : ListView.builder(
+                  itemCount: alarms.length,
+                  itemBuilder: (context, index) {
+                    final alarm = alarms[index];
+                    return Dismissible(
+                      key: Key(alarm.id.toString()),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        color: Colors.red,
+                        alignment: Alignment.centerRight,
+                        padding: EdgeInsets.symmetric(horizontal: 20),
+                        child: Icon(Icons.delete, color: Colors.white, size: 30),
+                      ),
+                      onDismissed: (direction) => _deleteAlarm(alarm),
+                      child: ListTile(
+                        title: Text(alarm.title),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(DateFormat('HH:mm').format(alarm.time)),
+                            Text('${alarm.grams}g de alimento'),
+                            if (alarm.repeatDays.isNotEmpty)
+                              Text(
+                                _repeatText(alarm.repeatDays),
+                                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                              ),
+                          ],
                         ),
-                      ],
-                    ),
-                    trailing: Switch(
-                      value: alarm.isEnabled,
-                      onChanged: (_) => _toggleAlarm(alarm),
-                    ),
-                    onTap: () => _editAlarm(alarm),
-                  ),
-                );
-              },
-            ),
+                        trailing: Switch(
+                          value: alarm.isEnabled,
+                          onChanged: (_) => _toggleAlarm(alarm),
+                        ),
+                        onTap: () => _editAlarm(alarm),
+                      ),
+                    );
+                  },
+                ),
       floatingActionButton: FloatingActionButton(
         onPressed: _addAlarm,
         child: Icon(Icons.add_alarm),

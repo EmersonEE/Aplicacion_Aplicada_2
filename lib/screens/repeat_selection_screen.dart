@@ -12,15 +12,23 @@ class RepeatSelectionScreen extends StatefulWidget {
 class _RepeatSelectionScreenState extends State<RepeatSelectionScreen> {
   late List<bool> selectedDays;
 
-  final List<String> dayNames = ['D', 'L', 'M', 'X', 'J', 'V', 'S']; // D = Domingo
+  final List<String> dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
   @override
   void initState() {
     super.initState();
     selectedDays = List.filled(7, false);
     for (int day in widget.initialDays) {
-      selectedDays[day] = true;
+      if (day >= 0 && day < 7) selectedDays[day] = true;
     }
+  }
+
+  void _saveAndPop() {
+    List<int> result = [];
+    for (int i = 0; i < 7; i++) {
+      if (selectedDays[i]) result.add(i);
+    }
+    Navigator.pop(context, result);
   }
 
   @override
@@ -30,13 +38,7 @@ class _RepeatSelectionScreenState extends State<RepeatSelectionScreen> {
         title: Text('Repetir'),
         actions: [
           TextButton(
-            onPressed: () {
-              List<int> result = [];
-              for (int i = 0; i < 7; i++) {
-                if (selectedDays[i]) result.add(i);
-              }
-              Navigator.pop(context, result);
-            },
+            onPressed: _saveAndPop,  // ← Usa la función que siempre guarda
             child: Text('Guardar', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -61,11 +63,11 @@ class _RepeatSelectionScreenState extends State<RepeatSelectionScreen> {
           ),
           Divider(),
           Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('Días específicos', style: Theme.of(context).textTheme.titleLarge),
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text('Días específicos', style: Theme.of(context).textTheme.titleMedium),
           ),
           Wrap(
-            spacing: 10,
+            spacing: 8,
             children: List.generate(7, (index) {
               return ChoiceChip(
                 label: Text(dayNames[index]),
@@ -74,11 +76,19 @@ class _RepeatSelectionScreenState extends State<RepeatSelectionScreen> {
                   setState(() {
                     selectedDays[index] = selected;
                   });
+                  // Opcional: guardar automáticamente al tocar un chip
+                  // _saveAndPop();
                 },
               );
             }),
           ),
+          SizedBox(height: 80), // Espacio para el botón flotante si lo quieres
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _saveAndPop,  // ← Botón grande y visible para guardar manual
+        child: Icon(Icons.check),
+        tooltip: 'Guardar selección',
       ),
     );
   }

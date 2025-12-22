@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class RepeatSelectionScreen extends StatefulWidget {
-  final List<int> initialDays;
+  final Map<String, bool> initialDays;
 
   const RepeatSelectionScreen({Key? key, required this.initialDays}) : super(key: key);
 
@@ -10,25 +10,15 @@ class RepeatSelectionScreen extends StatefulWidget {
 }
 
 class _RepeatSelectionScreenState extends State<RepeatSelectionScreen> {
-  late List<bool> selectedDays;
+  late Map<String, bool> selectedDays;
 
   final List<String> dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  final List<String> dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
   @override
   void initState() {
     super.initState();
-    selectedDays = List.filled(7, false);
-    for (int day in widget.initialDays) {
-      if (day >= 0 && day < 7) selectedDays[day] = true;
-    }
-  }
-
-  void _saveAndPop() {
-    List<int> result = [];
-    for (int i = 0; i < 7; i++) {
-      if (selectedDays[i]) result.add(i);
-    }
-    Navigator.pop(context, result);
+    selectedDays = Map.from(widget.initialDays);
   }
 
   @override
@@ -38,7 +28,7 @@ class _RepeatSelectionScreenState extends State<RepeatSelectionScreen> {
         title: Text('Repetir'),
         actions: [
           TextButton(
-            onPressed: _saveAndPop,  // ← Usa la función que siempre guarda
+            onPressed: () => Navigator.pop(context, selectedDays),
             child: Text('Guardar', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -47,19 +37,27 @@ class _RepeatSelectionScreenState extends State<RepeatSelectionScreen> {
         children: [
           ListTile(
             title: Text('Ninguna'),
-            onTap: () => Navigator.pop(context, []),
+            onTap: () => Navigator.pop(context, {
+              "sun": false, "mon": false, "tue": false, "wed": false, "thu": false, "fri": false, "sat": false
+            }),
           ),
           ListTile(
             title: Text('Diaria'),
-            onTap: () => Navigator.pop(context, [0,1,2,3,4,5,6]),
+            onTap: () => Navigator.pop(context, {
+              "sun": true, "mon": true, "tue": true, "wed": true, "thu": true, "fri": true, "sat": true
+            }),
           ),
           ListTile(
             title: Text('Lunes a viernes'),
-            onTap: () => Navigator.pop(context, [1,2,3,4,5]),
+            onTap: () => Navigator.pop(context, {
+              "sun": false, "mon": true, "tue": true, "wed": true, "thu": true, "fri": true, "sat": false
+            }),
           ),
           ListTile(
             title: Text('Fines de semana'),
-            onTap: () => Navigator.pop(context, [0,6]),
+            onTap: () => Navigator.pop(context, {
+              "sun": true, "mon": false, "tue": false, "wed": false, "thu": false, "fri": false, "sat": true
+            }),
           ),
           Divider(),
           Padding(
@@ -69,26 +67,19 @@ class _RepeatSelectionScreenState extends State<RepeatSelectionScreen> {
           Wrap(
             spacing: 8,
             children: List.generate(7, (index) {
+              final key = dayKeys[index];
               return ChoiceChip(
                 label: Text(dayNames[index]),
-                selected: selectedDays[index],
+                selected: selectedDays[key] ?? false,
                 onSelected: (selected) {
                   setState(() {
-                    selectedDays[index] = selected;
+                    selectedDays[key] = selected;
                   });
-                  // Opcional: guardar automáticamente al tocar un chip
-                  // _saveAndPop();
                 },
               );
             }),
           ),
-          SizedBox(height: 80), // Espacio para el botón flotante si lo quieres
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _saveAndPop,  // ← Botón grande y visible para guardar manual
-        child: Icon(Icons.check),
-        tooltip: 'Guardar selección',
       ),
     );
   }

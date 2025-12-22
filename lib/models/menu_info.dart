@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-enum MenuType { clock, alarm }
+enum MenuType { food, water, alarm }
 
 class MenuInfo {
   final MenuType menuType;

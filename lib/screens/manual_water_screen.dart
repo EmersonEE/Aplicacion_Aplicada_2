@@ -1,28 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 
-class ManualFeedScreen extends StatefulWidget {
+class ManualWaterScreen extends StatefulWidget {
   @override
-  _ManualFeedScreenState createState() => _ManualFeedScreenState();
+  _ManualWaterScreenState createState() => _ManualWaterScreenState();
 }
 
-class _ManualFeedScreenState extends State<ManualFeedScreen> {
-  int _selectedGrams = 40; // valor por defecto
+class _ManualWaterScreenState extends State<ManualWaterScreen> {
+  int _selectedMl = 200; // valor por defecto
 
-  final List<int> gramOptions = [20, 40, 60];
+  final List<int> mlOptions = [100, 200, 300];
 
-  final DatabaseReference _manualRef = FirebaseDatabase.instance.ref().child(
-    'manual_food',
+  final DatabaseReference _waterRef = FirebaseDatabase.instance.ref().child(
+    'manual_water',
   );
 
-  Future<void> _dispenseFood() async {
+  Future<void> _dispenseWater() async {
     try {
-      await _manualRef.child('grams').set(_selectedGrams); // ← int puro
+      await _waterRef.child('ml').set(_selectedMl); // ← int puro
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('¡Dispensando $_selectedGrams g de alimento!'),
-          backgroundColor: Colors.green,
+          content: Text('¡Dispensando $_selectedMl ml de agua!'),
+          backgroundColor: Colors.blue,
         ),
       );
     } catch (e) {
@@ -35,17 +35,17 @@ class _ManualFeedScreenState extends State<ManualFeedScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Alimentar ahora')),
+      appBar: AppBar(title: Text('Dispensar agua')),
       body: Center(
         child: Padding(
           padding: EdgeInsets.all(24),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.pets, size: 120, color: Colors.blue),
+              Icon(Icons.water_drop, size: 120, color: Colors.blue),
               SizedBox(height: 40),
               Text(
-                'Dispensar comida manualmente',
+                'Dispensar agua manualmente',
                 style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
@@ -54,14 +54,14 @@ class _ManualFeedScreenState extends State<ManualFeedScreen> {
               SizedBox(height: 20),
               Wrap(
                 spacing: 16,
-                children: gramOptions.map((grams) {
+                children: mlOptions.map((ml) {
                   return ChoiceChip(
-                    label: Text('$grams g', style: TextStyle(fontSize: 20)),
-                    selected: _selectedGrams == grams,
+                    label: Text('$ml ml', style: TextStyle(fontSize: 20)),
+                    selected: _selectedMl == ml,
                     onSelected: (selected) {
                       if (selected) {
                         setState(() {
-                          _selectedGrams = grams;
+                          _selectedMl = ml;
                         });
                       }
                     },
@@ -70,15 +70,15 @@ class _ManualFeedScreenState extends State<ManualFeedScreen> {
               ),
               SizedBox(height: 80),
               ElevatedButton.icon(
-                onPressed: _dispenseFood,
-                icon: Icon(Icons.restaurant, size: 50),
+                onPressed: _dispenseWater,
+                icon: Icon(Icons.local_drink, size: 50),
                 label: Text(
-                  'Dispensar $_selectedGrams g',
+                  'Dispensar $_selectedMl ml',
                   style: TextStyle(fontSize: 28),
                 ),
                 style: ElevatedButton.styleFrom(
                   padding: EdgeInsets.symmetric(horizontal: 50, vertical: 25),
-                  backgroundColor: Colors.green,
+                  backgroundColor: Colors.blue,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(40),

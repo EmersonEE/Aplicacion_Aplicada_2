@@ -3,7 +3,8 @@ import 'package:provider/provider.dart';
 import '../providers/menu_provider.dart';
 import '../models/menu_info.dart';
 import '../services/notification_service.dart';
-import '../screens/manual_feed_screen.dart';  // ← Tu nueva pantalla
+import '../screens/manual_feed_screen.dart';
+import '../screens/manual_water_screen.dart';
 import 'alarm_screen.dart';
 
 class MainScreen extends StatefulWidget {
@@ -13,7 +14,8 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   final List<MenuInfo> menuItems = [
-    MenuInfo(MenuType.clock, title: 'Alimentar Ahora', icon: Icons.restaurant),
+    MenuInfo(MenuType.food, title: 'Comida', icon: Icons.restaurant),
+    MenuInfo(MenuType.water, title: 'Agua', icon: Icons.water_drop),
     MenuInfo(MenuType.alarm, title: 'Alarmas', icon: Icons.alarm),
   ];
 
@@ -32,11 +34,17 @@ class _MainScreenState extends State<MainScreen> {
         final currentMenu = menuProvider.currentMenu;
 
         return Scaffold(
-          body: currentMenu == MenuType.clock 
-              ? ManualFeedScreen()   // ← Aquí está tu nueva pantalla
-              : AlarmScreen(),
+          body: currentMenu == MenuType.food
+              ? ManualFeedScreen()
+              : currentMenu == MenuType.water
+                  ? ManualWaterScreen()  // ← Ahora sí muestra la pantalla de agua
+                  : AlarmScreen(),
           bottomNavigationBar: BottomNavigationBar(
-            currentIndex: currentMenu == MenuType.clock ? 0 : 1,
+            currentIndex: currentMenu == MenuType.food
+                ? 0
+                : currentMenu == MenuType.water
+                    ? 1
+                    : 2,
             onTap: (index) {
               final selectedMenu = menuItems[index];
               menuProvider.updateMenu(selectedMenu);

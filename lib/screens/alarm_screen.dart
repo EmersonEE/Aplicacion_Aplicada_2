@@ -13,7 +13,6 @@ class AlarmScreen extends StatefulWidget {
 
 class _AlarmScreenState extends State<AlarmScreen> {
   List<Alarm> alarms = [];
-  int nextId = 1;
   bool _isLoading = true;
 
   @override
@@ -24,15 +23,23 @@ class _AlarmScreenState extends State<AlarmScreen> {
     });
   }
 
-  // Función auxiliar para mostrar texto de repetición
-  String _repeatText(List<int> days) {
-    if (days.isEmpty) return '';
-    if (days.length == 7) return 'Diaria';
-    if (days.length == 5 && !days.contains(0) && !days.contains(6)) return 'Lunes a viernes';
-    if (days.length == 2 && days.contains(0) && days.contains(6)) return 'Fines de semana';
+  String _repeatText(Map<String, bool> days) {
+    final active = days.entries.where((e) => e.value).map((e) => e.key).toList();
+    if (active.isEmpty) return '';
+    if (active.length == 7) return 'Diaria';
+    if (active.length == 5 && active.contains('mon') && active.contains('tue') && active.contains('wed') && active.contains('thu') && active.contains('fri')) return 'Lunes a viernes';
+    if (active.length == 2 && active.contains('sat') && active.contains('sun')) return 'Fines de semana';
 
-    const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-    return days.map((d) => dayNames[d]).join(', ');
+    const dayNames = {
+      'sun': 'Dom',
+      'mon': 'Lun',
+      'tue': 'Mar',
+      'wed': 'Mié',
+      'thu': 'Jue',
+      'fri': 'Vie',
+      'sat': 'Sáb'
+    };
+    return active.map((d) => dayNames[d] ?? '').join(', ');
   }
 
   Future<void> _loadAlarms() async {
@@ -40,35 +47,26 @@ class _AlarmScreenState extends State<AlarmScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final snapshot = await FirebaseAlarmService.db.get();
-      if (snapshot.exists && snapshot.value != null) {
-        final Map<dynamic, dynamic> data = snapshot.value as Map<dynamic, dynamic>;
-        final List<Alarm> firebaseAlarms = data.entries.map((e) {
-          final json = Map<String, dynamic>.from(e.value);
-          return Alarm.fromJson(json);
-        }).toList();
-
-        setState(() {
-          alarms = firebaseAlarms;
-          if (alarms.isNotEmpty) {
-            nextId = alarms.map((a) => a.id).reduce((a, b) => a > b ? a : b) + 1;
-          }
-        });
+      final firebaseAlarms = await FirebaseAlarmService.loadAlarmsFromFirebase();
+      if (firebaseAlarms.isNotEmpty) {
+        setState(() => alarms = firebaseAlarms);
+        await AlarmStorage.saveAlarms(alarms);
       } else {
         final local = await AlarmStorage.loadAlarms();
-        setState(() {
-          alarms = local;
-          if (alarms.isNotEmpty) {
-            nextId = alarms.map((a) => a.id).reduce((a, b) => a > b ? a : b) + 1;
+        setState(() => alarms = local);
+        for (final alarm in alarms) {
+          if (alarm.key == null) {
+            final newKey = await FirebaseAlarmService.addAlarm(alarm);
+            alarm.key = newKey;
           }
-        });
-        await FirebaseAlarmService.uploadAlarms(alarms);
+        }
+        await AlarmStorage.saveAlarms(alarms);
       }
 
       for (final alarm in alarms) {
         if (alarm.isEnabled) {
           await NotificationService.scheduleAlarm(
-            id: alarm.id,
+            id: alarm.hashCode,  // Usamos hashCode como ID temporal para notificaciones
             title: alarm.title,
             body: '¡Hora de alimentar!',
             scheduledDate: alarm.time,
@@ -78,17 +76,13 @@ class _AlarmScreenState extends State<AlarmScreen> {
 
       FirebaseAlarmService.alarmsStream.listen((updatedAlarms) {
         if (mounted) {
-          setState(() {
-            alarms = updatedAlarms;
-          });
+          setState(() => alarms = updatedAlarms);
+          AlarmStorage.saveAlarms(alarms);
         }
       });
     } catch (e) {
       final local = await AlarmStorage.loadAlarms();
-      setState(() {
-        alarms = local;
-        _isLoading = false;
-      });
+      setState(() => alarms = local);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -96,7 +90,14 @@ class _AlarmScreenState extends State<AlarmScreen> {
 
   Future<void> _saveAlarms() async {
     await AlarmStorage.saveAlarms(alarms);
-    await FirebaseAlarmService.uploadAlarms(alarms);
+    for (final alarm in alarms) {
+      if (alarm.key == null) {
+        final newKey = await FirebaseAlarmService.addAlarm(alarm);
+        alarm.key = newKey;
+      } else {
+        await FirebaseAlarmService.updateAlarm(alarm.key!, alarm);
+      }
+    }
   }
 
   void _addAlarm() async {
@@ -112,23 +113,17 @@ class _AlarmScreenState extends State<AlarmScreen> {
     );
 
     if (result != null) {
-      final newAlarm = Alarm(
-        id: nextId++,
-        title: result.title,
-        time: result.time,
-        grams: result.grams,
-        repeatDays: result.repeatDays,  // ← Guardamos repetición
-      );
-
+      final newKey = await FirebaseAlarmService.addAlarm(result);
+      result.key = newKey;
       setState(() {
-        alarms.add(newAlarm);
+        alarms.add(result);
       });
-      await _saveAlarms();
+      await AlarmStorage.saveAlarms(alarms);
       await NotificationService.scheduleAlarm(
-        id: newAlarm.id,
-        title: newAlarm.title,
+        id: result.hashCode,
+        title: result.title,
         body: '¡Hora de alimentar!',
-        scheduledDate: newAlarm.time,
+        scheduledDate: result.time,
       );
     }
   }
@@ -151,14 +146,14 @@ class _AlarmScreenState extends State<AlarmScreen> {
         existingAlarm.title = result.title;
         existingAlarm.time = result.time;
         existingAlarm.grams = result.grams;
-        existingAlarm.repeatDays = result.repeatDays;  // ← Actualizamos repetición
+        existingAlarm.repeatDays = result.repeatDays;
       });
       await _saveAlarms();
 
       if (existingAlarm.isEnabled) {
-        await NotificationService.cancelAlarm(existingAlarm.id);
+        await NotificationService.cancelAlarm(existingAlarm.hashCode);
         await NotificationService.scheduleAlarm(
-          id: existingAlarm.id,
+          id: existingAlarm.hashCode,
           title: existingAlarm.title,
           body: '¡Hora de alimentar!',
           scheduledDate: existingAlarm.time,
@@ -175,13 +170,13 @@ class _AlarmScreenState extends State<AlarmScreen> {
 
     if (alarm.isEnabled) {
       await NotificationService.scheduleAlarm(
-        id: alarm.id,
+        id: alarm.hashCode,
         title: alarm.title,
         body: '¡Hora de alimentar!',
         scheduledDate: alarm.time,
       );
     } else {
-      await NotificationService.cancelAlarm(alarm.id);
+      await NotificationService.cancelAlarm(alarm.hashCode);
     }
   }
 
@@ -190,8 +185,9 @@ class _AlarmScreenState extends State<AlarmScreen> {
     setState(() {
       alarms.remove(alarm);
     });
-    await _saveAlarms();
-    await NotificationService.cancelAlarm(alarm.id);
+    await AlarmStorage.saveAlarms(alarms);
+    await FirebaseAlarmService.deleteAlarm(alarm.key!);
+    await NotificationService.cancelAlarm(alarm.hashCode);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -202,10 +198,16 @@ class _AlarmScreenState extends State<AlarmScreen> {
             setState(() {
               alarms.insert(index, alarm);
             });
-            await _saveAlarms();
+            await AlarmStorage.saveAlarms(alarms);
+            if (alarm.key == null) {
+              final newKey = await FirebaseAlarmService.addAlarm(alarm);
+              alarm.key = newKey;
+            } else {
+              await FirebaseAlarmService.updateAlarm(alarm.key!, alarm);
+            }
             if (alarm.isEnabled) {
               await NotificationService.scheduleAlarm(
-                id: alarm.id,
+                id: alarm.hashCode,
                 title: alarm.title,
                 body: '¡Hora de alimentar!',
                 scheduledDate: alarm.time,
@@ -230,7 +232,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
                   itemBuilder: (context, index) {
                     final alarm = alarms[index];
                     return Dismissible(
-                      key: Key(alarm.id.toString()),
+                      key: Key(alarm.key ?? alarm.hashCode.toString()),
                       direction: DismissDirection.endToStart,
                       background: Container(
                         color: Colors.red,
@@ -246,7 +248,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
                           children: [
                             Text(DateFormat('HH:mm').format(alarm.time)),
                             Text('${alarm.grams}g de alimento'),
-                            if (alarm.repeatDays.isNotEmpty)
+                            if (alarm.repeatDays.values.any((v) => v))
                               Text(
                                 _repeatText(alarm.repeatDays),
                                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),

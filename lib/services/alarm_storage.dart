@@ -3,20 +3,43 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/alarm.dart';
 
 class AlarmStorage {
-  static const String _key = 'alarms';
+  static const String _key = 'alarms_data';
 
   static Future<void> saveAlarms(List<Alarm> alarms) async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonList = alarms.map((alarm) => alarm.toJson()).toList();
-    await prefs.setString(_key, jsonEncode(jsonList));
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final Map<String, dynamic> data = {};
+      for (var alarm in alarms) {
+        final localKey = alarm.key ?? 'temp_${DateTime.now().millisecondsSinceEpoch}';
+        data[localKey] = alarm.toJson();
+      }
+      await prefs.setString(_key, jsonEncode(data));
+    } catch (e) {
+      print('Error guardando alarmas localmente: $e');
+    }
   }
 
   static Future<List<Alarm>> loadAlarms() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonString = prefs.getString(_key);
-    if (jsonString == null || jsonString.isEmpty) return [];
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonString = prefs.getString(_key);
+      
+      if (jsonString == null || jsonString.isEmpty) return [];
 
-    final List<dynamic> jsonList = jsonDecode(jsonString);
-    return jsonList.map((json) => Alarm.fromJson(json)).toList();
+      final Map<String, dynamic> data = jsonDecode(jsonString);
+      final List<Alarm> alarms = [];
+
+      data.forEach((key, value) {
+        final json = Map<String, dynamic>.from(value);
+        final alarm = Alarm.fromJson(json);
+        alarm.key = key;
+        alarms.add(alarm);
+      });
+
+      return alarms..sort((a, b) => a.time.compareTo(b.time));
+    } catch (e) {
+      print('Error cargando alarmas desde local: $e');
+      return [];
+    }
   }
 }

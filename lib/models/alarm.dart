@@ -1,35 +1,50 @@
 class Alarm {
-  final int id;
+  String? key;  // Clave única de Firebase
   String title;
   DateTime time;
   bool isEnabled;
   int grams;
-  List<int> repeatDays;  // ← NUEVO: 0=Dom, 1=Lun, ..., 6=Sab. [] = sin repetición
+  Map<String, bool> repeatDays;
+  int lastTriggered = 0;
 
   Alarm({
-    required this.id,
+    this.key,
     required this.title,
     required this.time,
     this.isEnabled = true,
     this.grams = 40,
-    List<int>? repeatDays,
-  }) : repeatDays = repeatDays ?? [];
+    Map<String, bool>? repeatDays,
+    this.lastTriggered = 0,
+  }) : repeatDays = repeatDays ?? {
+          "sun": false,
+          "mon": false,
+          "tue": false,
+          "wed": false,
+          "thu": false,
+          "fri": false,
+          "sat": false,
+        };
 
   Map<String, dynamic> toJson() => {
-        'id': id,
         'title': title,
         'time': time.millisecondsSinceEpoch,
         'isEnabled': isEnabled,
         'grams': grams,
         'repeatDays': repeatDays,
+        'lastTriggered': lastTriggered,
       };
 
   factory Alarm.fromJson(Map<String, dynamic> json) => Alarm(
-        id: json['id'] as int,
-        title: json['title'] as String,
+        title: json['title'] as String? ?? 'Alarma',
         time: DateTime.fromMillisecondsSinceEpoch(json['time'] as int),
         isEnabled: json['isEnabled'] as bool? ?? true,
         grams: json['grams'] as int? ?? 40,
-        repeatDays: (json['repeatDays'] as List<dynamic>?)?.cast<int>() ?? [],
+        repeatDays: Map<String, bool>.from(
+          (json['repeatDays'] as Map<dynamic, dynamic>?)?.map(
+                (k, v) => MapEntry(k.toString(), v as bool),
+              ) ??
+              {},
+        ),
+        lastTriggered: json['lastTriggered'] as int? ?? 0,
       );
 }
